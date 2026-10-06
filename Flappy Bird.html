@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flappy Bird</title>
+<style>
+:root{--bg:#70c5ce;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1d2b36}}
+:root[data-theme="dark"]{--bg:#1d2b36}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0}
+body{background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:manipulation;user-select:none;-webkit-user-select:none;font-family:system-ui,sans-serif}
+canvas{height:100%;max-width:100%;aspect-ratio:288/512;image-rendering:pixelated;cursor:pointer;box-shadow:0 8px 30px rgba(0,0,0,.35)}
+</style>
+</head>
+<body>
+<canvas id="c" width="288" height="512"></canvas>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const W=288,H=512,GH=80,GY=H-GH;
+const GRAV=.42,FLAP=-6.8,PW=52,GAP=112,SPD=2,BX=70,BR=12;
+let state='ready',bird,pipes,score,best=0,groundX=0,cloudX=0,frame=0,overAt=0,newBest=false;
+try{best=+localStorage.getItem('flappy-best')||0}catch(e){}
+
+// âm thanh đơn giản
+let ac;
+function beep(f,d,type='square',v=.06){
+  try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+  const o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.value=f;
+  g.gain.setValueAtTime(v,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d);
+  o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(e){}
+}
+
+function reset(){
+  bird={y:H/2-30,vy:0,rot:0};pipes=[];score=0;newBest=false;
+}
+function flap(){
+  const now=performance.now();
+  if(state==='ready'){state='play';reset();bird.vy=FLAP;beep(520,.1)}
+  else if(state==='play'){bird.vy=FLAP;beep(520,.1)}
+  else if(state==='over'&&now-overAt>500){state='ready';reset()}
+}
+function die(){
+  if(state!=='play')return;
+  state='over';overAt=performance.now();beep(150,.3,'sawtooth',.1);
+  if(score>best){best=score;newBest=true;try{localStorage.setItem('flappy-best',best)}catch(e){}}
+}
+function addPipe(){
+  const top=60+Math.random()*(GY-GAP-120);
+  pipes.push({x:W,top,passed:false});
+}
+
+function update(dt){
+  cloudX=(cloudX+.3*dt)%W;
+  if(state!=='over')groundX=(groundX-SPD*dt)%24;
+  if(state==='ready'){bird.y=H/2-30+Math.sin(frame/12)*6;bird.rot=0;return}
+  if(state==='play'||state==='over'){
+    bird.vy+=GRAV*dt;bird.y+=bird.vy*dt;
+    bird.rot=Math.max(-.45,Math.min(1.4,bird.vy*.07));
+    if(bird.y>GY-BR){bird.y=GY-BR;die()}
+    if(bird.y<BR&&state==='play'){bird.y=BR;bird.vy=0}
+  }
+  if(state!=='play')return;
+  if(!pipes.length||pipes[pipes.length-1].x<W-160)addPipe();
+  for(const p of pipes){
+    p.x-=SPD*dt;
+    if(!p.passed&&p.x+PW<BX-BR){p.passed=true;score++;beep(880,.1,'triangle',.08)}
+    // va chạm
+    if(BX+BR-3>p.x&&BX-BR+3<p.x+PW&&(bird.y-BR+3<p.top||bird.y+BR-3>p.top+GAP))die();
+  }
+  if(pipes.length&&pipes[0].x<-PW)pipes.shift();
+}
+
+function drawPipe(x,y,h,flip){
+  const g=ctx.createLinearGradient(x,0,x+PW,0);
+  g.addColorStop(0,'#6fbf2b');g.addColorStop(.4,'#9be04b');g.addColorStop(1,'#4c9a1a');
+  ctx.fillStyle=g;ctx.strokeStyle='#2d5a0f';ctx.lineWidth=2;
+  const capH=24;
+  const bodyY=flip?y:y,bodyH=h-capH;
+  if(flip){ // ống trên: thân từ 0 → top-capH, mũ ở dưới
+    ctx.fillRect(x+3,0,PW-6,h-capH);ctx.strokeRect(x+3,0,PW-6,h-capH);
+    ctx.fillRect(x,h-capH,PW,capH);ctx.strokeRect(x,h-capH,PW,capH);
+  }else{
+    ctx.fillRect(x+3,y+capH,PW-6,h-capH);ctx.strokeRect(x+3,y+capH,PW-6,h-capH);
+    ctx.fillRect(x,y,PW,capH);ctx.strokeRect(x,y,PW,capH);
+  }
+}
+
+function drawBird(){
+  ctx.save();ctx.translate(BX,bird.y);ctx.rotate(bird.rot);
+  // thân
+  ctx.fillStyle='#f8d030';ctx.strokeStyle='#4a3000';ctx.lineWidth=2;
+  ctx.beginPath();ctx.ellipse(0,0,16,12,0,0,7);ctx.fill();ctx.stroke();
+  // bụng
+  ctx.fillStyle='#fff3b0';ctx.beginPath();ctx.ellipse(2,5,9,5,0,0,7);ctx.fill();
+  // cánh vỗ
+  const w=state==='over'?0:Math.sin(frame/(state==='play'?2.2:4))*5;
+  ctx.fillStyle='#f0a020';ctx.beginPath();ctx.ellipse(-6,2+w*.4,8,5+Math.abs(w)*.3,-.3,0,7);ctx.fill();ctx.stroke();
+  // mắt
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(7,-4,5,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#000';ctx.beginPath();ctx.arc(9,-4,2,0,7);ctx.fill();
+  // mỏ
+  ctx.fillStyle='#f05a28';ctx.beginPath();ctx.ellipse(14,4,7,4,0,0,7);ctx.fill();ctx.stroke();
+  ctx.restore();
+}
+
+function text(t,x,y,size,color='#fff',align='center'){
+  ctx.font=`bold ${size}px "Courier New",monospace`;ctx.textAlign=align;ctx.lineJoin='round';
+  ctx.lineWidth=size/5;ctx.strokeStyle='#3a2a10';ctx.strokeText(t,x,y);
+  ctx.fillStyle=color;ctx.fillText(t,x,y);
+}
+
+function draw(){
+  // trời
+  const sky=ctx.createLinearGradient(0,0,0,GY);sky.addColorStop(0,'#4ec0ca');sky.addColorStop(1,'#bfeaf0');
+  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+  // mây
+  ctx.fillStyle='rgba(255,255,255,.85)';
+  for(let i=-1;i<2;i++){const x=i*W+W-cloudX;
+    [[40,120,18],[62,115,24],[86,122,16],[190,170,16],[210,165,22],[232,172,14]].forEach(([a,b,r])=>{ctx.beginPath();ctx.arc(x+a-W,b,r,0,7);ctx.fill()})}
+  // thành phố / đồi
+  ctx.fillStyle='#8fd18a';
+  for(let i=0;i<8;i++){ctx.beginPath();ctx.arc(i*44,GY,38+(i%3)*8,Math.PI,0);ctx.fill()}
+  ctx.fillStyle='#6cbf64';
+  for(let i=0;i<6;i++){ctx.beginPath();ctx.arc(i*60+20,GY,26+(i%2)*10,Math.PI,0);ctx.fill()}
+  // ống
+  for(const p of pipes){drawPipe(p.x,0,p.top,true);drawPipe(p.x,p.top+GAP,GY-(p.top+GAP),false)}
+  // đất
+  ctx.fillStyle='#ded895';ctx.fillRect(0,GY,W,GH);
+  ctx.fillStyle='#73bf2e';ctx.fillRect(0,GY,W,14);
+  ctx.fillStyle='#9ae03f';
+  for(let x=groundX-24;x<W+24;x+=24){ctx.beginPath();ctx.moveTo(x,GY);ctx.lineTo(x+12,GY);ctx.lineTo(x+4,GY+14);ctx.lineTo(x-8,GY+14);ctx.fill()}
+  ctx.fillStyle='#543847';ctx.fillRect(0,GY+14,W,3);
+  ctx.fillStyle='#d2b04c';ctx.fillRect(0,GY+17,W,4);
+  // chim
+  drawBird();
+  // UI
+  if(state==='ready'){
+    text('FLAPPY BIRD',W/2,120,32,'#ffa634');
+    text('Chạm / Space để bay',W/2,300,15);
+    text('Kỷ lục: '+best,W/2,GY+48,16);
+  }
+  if(state==='play')text(score,W/2,80,44);
+  if(state==='over'){
+    text('GAME OVER',W/2,110,34,'#ff6a3d');
+    ctx.fillStyle='#ded895';ctx.strokeStyle='#543847';ctx.lineWidth=3;
+    ctx.beginPath();ctx.roundRect(44,150,200,120,8);ctx.fill();ctx.stroke();
+    ctx.font='bold 13px "Courier New",monospace';ctx.textAlign='left';ctx.fillStyle='#e86101';
+    ctx.fillText('ĐIỂM',60,180);ctx.fillText('CAO NHẤT',60,225);
+    ctx.textAlign='right';ctx.fillStyle='#fff';ctx.font='bold 26px "Courier New",monospace';
+    ctx.strokeStyle='#543847';ctx.lineWidth=4;
+    ctx.strokeText(score,228,182);ctx.fillText(score,228,182);
+    ctx.strokeText(best,228,230);ctx.fillText(best,228,230);
+    if(newBest){ctx.font='bold 11px "Courier New",monospace';ctx.fillStyle='#e03030';ctx.textAlign='center';ctx.fillText('MỚI!',140,246)}
+    // huy chương
+    const m=score>=30?['#e5e4e2','Bạch kim']:score>=20?['#ffd700','Vàng']:score>=10?['#c0c0c0','Bạc']:score>=5?['#cd7f32','Đồng']:null;
+    if(m){ctx.fillStyle=m[0];ctx.strokeStyle='#543847';ctx.lineWidth=2;ctx.beginPath();ctx.arc(80,205,0,0,7);ctx.stroke();
+      ctx.beginPath();ctx.arc(76,208,0,0,7)}
+    text('Chạm để chơi lại',W/2,320,15);
+  }
+}
+
+let last=performance.now();
+function loop(t){
+  const dt=Math.min(2.5,(t-last)/16.667);last=t;frame++;
+  update(dt);draw();requestAnimationFrame(loop);
+}
+reset();requestAnimationFrame(loop);
+
+cv.addEventListener('pointerdown',e=>{e.preventDefault();flap()});
+addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault();if(!e.repeat)flap()}});
+</script>
+</body>
+</html>
