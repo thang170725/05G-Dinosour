@@ -6,7 +6,7 @@
 
 # Guideline
 ```bash
-1. git clone https://github.com/thang170725/04G-Flappy-Bird.git
-2. cd 04G-Flappy-Bird
-3. open file Flappy Bird or go live by vs code
+1. git clone https://github.com/thang170725/05G-Dinosour.git
+2. cd 05G-Dinosour
+3. python dino
 ```
