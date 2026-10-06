@@ -6,7 +6,7 @@
 
 # Guideline
 ```bash
-1. git clone https://github.com/thang170725/01G-Xiangqi.git
-2. cd 01G-Xiangqi
-3. python xiangqi.py
+1. git clone https://github.com/thang170725/02G-Tetris.git
+2. cd 02G-Tetris
+3. python tetris.py
 ```
